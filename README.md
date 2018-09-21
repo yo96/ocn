@@ -1,2 +1,2 @@
-# ocn
-On chip network generator
+# PyMTL OCN
+An on chip network generator/simulator developed using PyMTL.
