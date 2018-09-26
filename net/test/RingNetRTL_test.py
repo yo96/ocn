@@ -25,6 +25,7 @@ from net.RingNetRTL import RingNetRTL
 
 from NetFL_test import test_case_table
 from TestHelper import mk_net_msgs
+from TestSinkFixedDelay import TestSinkFixedDelay
 
 #-------------------------------------------------------------------------
 # TestHarness
@@ -54,7 +55,7 @@ class TestHarness( Model ):
 
     s.src  = [ TestSource ( msg_type, s.src_msgs[x],  s.src_delay[x]  ) for x in xrange(num_routers) ]
     s.net  = NetModel
-    s.sink = [ TestNetSink( msg_type, s.sink_msgs[x], s.sink_delay[x] ) for x in xrange(num_routers) ]
+    s.sink = [ TestSinkFixedDelay( msg_type, s.sink_msgs[x], s.sink_delay[x] ) for x in xrange(num_routers) ]
 
     # Dump VCD
     if dump_vcd:
@@ -158,9 +159,9 @@ def test_Ring_default( test_params, dump_vcd, test_verilog ):
 def test_Ring_greedy( test_params, dump_vcd, test_verilog ):
   run_net_test( RingNetRTL(routing_algorithm='greedy'), 
                 test_params.src_delay, test_params.sink_delay, test_params.msgs,
-                num_routers = 4, num_ports = 5, 
+                num_routers = 4, num_ports = 5,
                 opaque_nbits = 8, payload_nbits = 32,
-                dump_vcd = False, test_verilog = False )
+                dump_vcd = dump_vcd, test_verilog = test_verilog)
 
 # Hypothesis test
 @hypothesis.strategies.composite

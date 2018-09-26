@@ -142,12 +142,15 @@ class RingRouterGreedyRTL( Model ):
         elif s.dist_west[i] > s.dist_east[i]:
           s.arbitors[DIR_E].reqs[i].value = s.input_buffer[i].deq.val
         else: # break ties
-          s.arbitors[DIR_W].reqs[i].value = s.input_buffer[i].deq.val
+          s.arbitors[DIR_E].reqs[i].value = s.input_buffer[i].deq.val
 
   # Sublime SFTP test Test 2
   def line_trace( s ):
     in0_str = s.in_[0].to_str( "%02s:%1s>%1s" % ( s.in_[0].msg.opaque, s.in_[0].msg.src, s.in_[0].msg.dest ) )
     in1_str = s.in_[1].to_str( "%02s:%1s>%1s" % ( s.in_[1].msg.opaque, s.in_[1].msg.src, s.in_[1].msg.dest ) )
     in2_str = s.in_[2].to_str( "%02s:%1s>%1s" % ( s.in_[2].msg.opaque, s.in_[2].msg.src, s.in_[2].msg.dest ) )
-    return "( {},w:{},e:{})({}|{}|{} )".format( s.router_id, s.dist_west[2], s.dist_east[2],
+    #in0_str = s.input_buffer[0].deq.to_str( "%02s:%1s>%1s" % ( s.input_buffer[0].deq.msg.opaque, s.input_buffer[0].deq.msg.src, s.input_buffer[0].deq.msg.dest ) )
+    #in1_str = s.input_buffer[1].deq.to_str( "%02s:%1s>%1s" % ( s.input_buffer[1].deq.msg.opaque, s.input_buffer[1].deq.msg.src, s.input_buffer[1].deq.msg.dest ) )
+    #in2_str = s.input_buffer[2].deq.to_str( "%02s:%1s>%1s" % ( s.input_buffer[2].deq.msg.opaque, s.input_buffer[2].deq.msg.src, s.input_buffer[2].deq.msg.dest ) )
+    return "({})({}|{}|{}) ".format( s.router_id, 
                                                 in0_str, in1_str, in2_str )  

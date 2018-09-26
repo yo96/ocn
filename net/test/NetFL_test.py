@@ -184,8 +184,8 @@ test_case_table = mk_test_case_table([
   [ "four_pkt_self",        four_pkt_self(),          [0,0,0,0],        [0,0,0,0]   ],
   [ "single_dest_2router",  single_dest_2router(),    [0,0,0,0],        [0,0,0,0]   ],  
   [ "var_pkt_self",         var_pkt_self(),           [0,0,0,0],        [0,0,0,0]   ],
-  [ "dead_lock",            dead_lock(),              [0,0,0,0],        [100,100,100,100]   ],
-
+  [ "dead_lock",            dead_lock(),              [0,0,0,0],        [30,30,30,30]   ],
+  [ "deadlock_pro",         deadlock_pro(),           [0,0,0,0],        [30,30,11,13]   ],
   [ "a2b_1pkt",             a2b_1pkt(),               [0,0,0,0],        [0,0,0,0]   ],
   [ "a2b_4pkt",             a2b_4pkt(),               [0,0,0,0],        [0,0,0,0]   ],
   [ "a2b_all",              a2b_all(),                [0,0,0,0],        [0,0,0,0]   ],
