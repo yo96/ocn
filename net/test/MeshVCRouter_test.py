@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import pytest 
 import hypothesis 
+from hypothesis import strategies as st
 
 from pymtl      import * 
 from pclib.test import TestSource, TestSink, mk_test_case_table
@@ -233,10 +234,11 @@ def copmute_src_sink( pos_x, pos_y, dimension, msg_lst ):
 def basic_msgs( pos_x, pos_y, mesh_wid, mesh_ht, dimension ):
   return mk_test_msgs( 5, mesh_wid, mesh_ht, 
          copmute_src_sink( pos_x,pos_y, dimension,
-          [ (   0,      0,      1,      1,      0, 0xc001d00d)
+            # src_x,  src_y, dest_x, dest_y, opaque, payload
+          [ #(   0,      0,      1,      1,      0, 0xc001d00d),
+            (   1,      1,      0,      0,      0, 0xc001d00d),
           ]) )
 
-          # src_x,  src_y, dest_x, dest_y, opaque, payload
 
 #-------------------------------------------------------------------------------
 # Test Case Table
@@ -245,7 +247,7 @@ def basic_msgs( pos_x, pos_y, mesh_wid, mesh_ht, dimension ):
 test_case_table = mk_test_case_table([
   (                 "msg_func    routing  mesh_wid mesh_ht pos_x pos_y src_delay sink_delay" ),
   [ "DOR_y_1pkt",    basic_msgs, 'DOR_Y', 2,       2,      1,    1,    0,        0         ],
-  [ "DOR_x_1pkt",    basic_msgs, 'DOR_X', 3,       3,      3,    3,    0,        0         ]
+  [ "DOR_x_1pkt",    basic_msgs, 'DOR_X', 2,       2,      0,    0,    0,        0         ]
 
 ])
 
@@ -254,8 +256,10 @@ test_case_table = mk_test_case_table([
 # Run tests
 #-------------------------------------------------------------------------------
 
+
+# Direct tests
 @pytest.mark.parametrize( **test_case_table )
-def test_router( test_params, dump_vcd, test_verilog ):
+def test_direct( test_params, dump_vcd, test_verilog ):
   dimension = ''
   if test_params.routing == 'DOR_X':
     dimension = 'x'
@@ -272,4 +276,50 @@ def test_router( test_params, dump_vcd, test_verilog ):
                       test_params.mesh_wid, test_params.mesh_ht, 
                       test_params.pos_x, test_params.pos_y, 8, 32,
                       msgs, test_params.src_delay, test_params.sink_delay,
+                      dump_vcd, test_verilog )
+
+# Hypothesis tests
+@hypothesis.strategies.composite
+def test_msg( draw, mesh_wid, mesh_ht, dimension, pos_x, pos_y,  ):
+  num_routers = mesh_wid * mesh_ht
+  dest_x = draw( st.integers(0, mesh_wid-1) )
+  dest_y = draw( st.integers(0, mesh_ht -1) )
+  src_x  = draw( st.integers(0, mesh_wid-1) )
+  src_y  = draw( st.integers(0, mesh_ht -1) )
+  tsrc, tsink = dimension_order_routing(dimension, pos_x, pos_y, 
+                                        src_x, src_y, dest_x, dest_y  )
+  opaque =  draw( st.integers(0,1) )
+  payload = 0xdeadd00d
+  return (tsrc, tsink, src_x, src_y, dest_x, dest_y, opaque, payload)
+
+@hypothesis.given( 
+  mesh_wid     = st.integers( 2, 4  ),
+  mesh_ht      = st.integers( 2, 4  ),
+  src_delay    = st.integers( 0, 30 ),
+  sink_delay   = st.integers( 0, 30 ),
+  routing_algo = st.sampled_from( ['DOR_X','DOR_Y'] ),
+  pos_x        = st.data(),
+  pos_y        = st.data(),
+  test_msgs    = st.data()
+  )
+def test_hypothesis( mesh_wid, mesh_ht, src_delay, sink_delay, 
+                     routing_algo, pos_x, pos_y, test_msgs,
+                     dump_vcd, test_verilog ):
+  hypothesis.assume( mesh_wid * mesh_ht > 1 )
+  pos_x = pos_x.draw( st.integers(0,mesh_wid-1) )
+  pos_y = pos_y.draw( st.integers(0,mesh_ht -1) )
+  if routing_algo == 'DOR_Y':
+    dimension = 'y'
+  elif routing_algo == 'DOR_X':
+    dimension = 'x'
+  else:
+    raise AssertionError( "Unimplemented routing algorithm %s" % routing_algo )
+  msgs  = test_msgs.draw( st.lists( test_msg(mesh_wid, mesh_ht, dimension, pos_x, pos_y),
+                          min_size = 1, max_size = 100) )
+  
+  run_vc_router_test( MeshVCRouterRTL(mesh_wid=mesh_wid, mesh_ht=mesh_ht, 
+                                      routing_algo=routing_algo),
+                      mesh_wid, mesh_ht, pos_x, pos_y, 8, 32,
+                      mk_test_msgs( 5, mesh_wid, mesh_ht, msgs ), 
+                      src_delay, sink_delay,
                       dump_vcd, test_verilog )
