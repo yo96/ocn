@@ -279,8 +279,9 @@ def test_direct( test_params, dump_vcd, test_verilog ):
                       dump_vcd, test_verilog )
 
 # Hypothesis tests
+@pytest.mark.skip
 @hypothesis.strategies.composite
-def test_msg( draw, mesh_wid, mesh_ht, dimension, pos_x, pos_y,  ):
+def mesh_test_msg( draw, mesh_wid, mesh_ht, dimension, pos_x, pos_y,  ):
   num_routers = mesh_wid * mesh_ht
   dest_x = draw( st.integers(0, mesh_wid-1) )
   dest_y = draw( st.integers(0, mesh_ht -1) )
@@ -314,7 +315,7 @@ def test_hypothesis( mesh_wid, mesh_ht, src_delay, sink_delay,
     dimension = 'x'
   else:
     raise AssertionError( "Unimplemented routing algorithm %s" % routing_algo )
-  msgs  = test_msgs.draw( st.lists( test_msg(mesh_wid, mesh_ht, dimension, pos_x, pos_y),
+  msgs  = test_msgs.draw( st.lists( mesh_test_msg(mesh_wid, mesh_ht, dimension, pos_x, pos_y),
                           min_size = 1, max_size = 100) )
   
   run_vc_router_test( MeshVCRouterRTL(mesh_wid=mesh_wid, mesh_ht=mesh_ht, 
