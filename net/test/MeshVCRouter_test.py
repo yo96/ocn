@@ -243,8 +243,9 @@ def basic_msgs( pos_x, pos_y, mesh_wid, mesh_ht, dimension ):
 #-------------------------------------------------------------------------------
 
 test_case_table = mk_test_case_table([
-  (                 "msgs                     routing  mesh_wid mesh_ht pos_x pos_y src_delay sink_delay" ),
-  [ "first_test",    basic_msgs(1,1,2,2,'y'), 'DOR_Y', 2,       2,      1,    1,    0,        0         ]
+  (                 "msg_func    routing  mesh_wid mesh_ht pos_x pos_y src_delay sink_delay" ),
+  [ "DOR_y_1pkt",    basic_msgs, 'DOR_Y', 2,       2,      1,    1,    0,        0         ],
+  [ "DOR_x_1pkt",    basic_msgs, 'DOR_X', 3,       3,      3,    3,    0,        0         ]
 
 ])
 
@@ -254,12 +255,21 @@ test_case_table = mk_test_case_table([
 #-------------------------------------------------------------------------------
 
 @pytest.mark.parametrize( **test_case_table )
-def test( test_params, dump_vcd, test_verilog ):
+def test_router( test_params, dump_vcd, test_verilog ):
+  dimension = ''
+  if test_params.routing == 'DOR_X':
+    dimension = 'x'
+  elif test_params.routing == 'DOR_Y':
+    dimension = 'y'
+  else: 
+    raise AssertionError( "Invalid routing algorithm input for VCRouter_test" )
+  msgs = test_params.msg_func( test_params.pos_x, test_params.pos_y, 
+                                test_params.mesh_wid, test_params.mesh_ht, dimension )
   run_vc_router_test( MeshVCRouterRTL(
                         mesh_wid = test_params.mesh_wid, mesh_ht=test_params.mesh_ht,
                         routing_algo = test_params.routing
                       ),
                       test_params.mesh_wid, test_params.mesh_ht, 
                       test_params.pos_x, test_params.pos_y, 8, 32,
-                      test_params.msgs, test_params.src_delay, test_params.sink_delay,
+                      msgs, test_params.src_delay, test_params.sink_delay,
                       dump_vcd, test_verilog )
