@@ -163,7 +163,23 @@ class MeshVCRouterRTL( Model ):
             s.arbitors[DIR_E].reqs[i].value = s.input_buffer[i].deq.val
 
       elif routing_algo == 'DOR_X':
-        raise AssertionError( 'Unimplemented' )
+        for i in range( num_ports ):
+          s.arbitors[i].reqs.value = 0
+        for i in range( num_ports ):
+          if s.pos_x == s.dest_x[i] and s.pos_y == s.dest_y[i]:
+            s.arbitors[DIR_C].reqs[i].value = s.input_buffer[i].deq.val
+
+          elif s.dest_x[i] < s.pos_x:
+            s.arbitors[DIR_W].reqs[i].value = s.input_buffer[i].deq.val
+          
+          elif s.dest_x[i] > s.pos_x:
+            s.arbitors[DIR_E].reqs[i].value = s.input_buffer[i].deq.val
+          
+          elif s.dest_y[i] < s.pos_y:
+            s.arbitors[DIR_N].reqs[i].value = s.input_buffer[i].deq.val
+          
+          else:
+            s.arbitors[DIR_S].reqs[i].value = s.input_buffer[i].deq.val
       else:
         raise AssertionError( 'Invalid routing algorithm!' )
     
