@@ -124,7 +124,6 @@ class MeshVCRouterRTL( Model ):
 
     # Virtual channel connections
     if virtual_channel:
-
       @s.combinational
       def vcInValRdy():
           for i in range( num_ports ):
@@ -154,18 +153,7 @@ class MeshVCRouterRTL( Model ):
       for i in range( num_ports ):
         s.connect( s.vc_out_msg[i], s.crossbar.in_[i] )
 
-    # Input buffers
-    #s.input_buffer = NormalQueue[num_ports](2, msg_type)
-    #for i in range( num_ports ):
-    #  s.connect_pairs(
-    #    s.input_buffer[i].enq,     s.in_[i],
-    #    s.input_buffer[i].deq.msg, s.crossbar.in_[i]
-    #  )
-
-    # Arbitors
-
-
-
+    # Arbitors for each output port
     s.arbitors = RoundRobinArbiterEn[num_ports](num_ports)
     for i in range( num_ports ):
       s.connect_pairs( 
@@ -269,6 +257,46 @@ class MeshVCRouterRTL( Model ):
           
           else:
             s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]
+    # TODO: set 
+    elif routing_algo == 'O1Turn':
+      @s.combinational
+      def o1turnSetArbitorReq():
+        for i in range( num_ports ):
+          s.arbitors[i].reqs.value = 0
+        for i in range( num_ports ):
+          # 0 for y-DOR
+          if vc_id[i] == 0:
+            for i in range( num_ports ):
+              if s.pos_x == s.dest_x[i] and s.pos_y == s.dest_y[i]:
+                s.arbitors[DIR_C].reqs[i].value = s.vc_out_val[i]
+
+              elif s.dest_y[i] < s.pos_y:
+                s.arbitors[DIR_N].reqs[i].value = s.vc_out_val[i]
+              
+              elif s.dest_y[i] > s.pos_y:
+                s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]
+              
+              elif s.dest_x[i] < s.pos_x:
+                s.arbitors[DIR_W].reqs[i].value = s.vc_out_val[i]
+              
+              else:
+                s.arbitors[DIR_E].reqs[i].value = s.vc_out_val[i]
+          else:
+            for i in range( num_ports ):
+              if s.pos_x == s.dest_x[i] and s.pos_y == s.dest_y[i]:
+                s.arbitors[DIR_C].reqs[i].value = s.vc_out_val[i]
+
+              elif s.dest_x[i] < s.pos_x:
+                s.arbitors[DIR_W].reqs[i].value = s.vc_out_val[i]
+              
+              elif s.dest_x[i] > s.pos_x:
+                s.arbitors[DIR_E].reqs[i].value = s.vc_out_val[i]
+              
+              elif s.dest_y[i] < s.pos_y:
+                s.arbitors[DIR_N].reqs[i].value = s.vc_out_val[i]
+              
+              else:
+                s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]                       
     else:
       raise AssertionError( 'Invalid routing algorithm!' )
     
