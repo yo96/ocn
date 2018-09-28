@@ -17,7 +17,8 @@ class MeshVCRouterRTL( Model ):
                  payload_nbits = 32, 
                  mesh_wid      = 2,
                  mesh_ht       = 2,
-                 routing_algo  = 'DOR_Y'
+                 routing_algo  = 'DOR_Y',
+                 virtual_channel = 'false'
                 ):
     #-------------------------------------------------------------
     # Parameters & Constants
@@ -74,16 +75,6 @@ class MeshVCRouterRTL( Model ):
 
     s.arbitor_en = Wire( num_ports )
     s.has_grant  = Wire( num_ports )
-    s.vc_id      = Wire[num_ports]( 1 )
-
-    s.vc_out_id  = Wire[num_ports]( 1 )
-    s.vc_arb_en  = Wire[num_ports]( 1 )
-    s.vc_out_val = Wire[num_ports]( 1 )
-    s.vc_out_rdy = Wire[num_ports]( 1 )
-    s.vc_out_msg = Wire[num_ports]( s.last_bit )
-
-    #s.deq_rdy    = Wire( num_ports )
-
 
     # Crossbar -- no output buffers
     s.crossbar = m = Crossbar(num_ports, msg_type)
@@ -91,45 +82,77 @@ class MeshVCRouterRTL( Model ):
       s.connect( m.out[i], s.out[i].msg )
       s.connect_wire( dest=m.sel[i], src=s.sels[i])
 
-    # Virtual channel buffers - 
-    #   upper buffer reserved for X DOR and lower for Y DOR
-    s.vc_buffers_upper = NormalQueue[num_ports](2, msg_type)
-    s.vc_buffers_lower = NormalQueue[num_ports](2, msg_type)
-    for i in range( num_ports ):
-      s.connect_pairs(
-        s.vc_buffers_upper[i].enq.msg, s.in_[i].msg,
-        s.vc_buffers_lower[i].enq.msg, s.in_[i].msg
-      )
-
-
-    @s.combinational
-    def vcInValRdy():
+    # Input buffers
+    if virtual_channel:
+      s.vc_id      = Wire[num_ports]( 1 )
+      s.vc_out_id  = Wire[num_ports]( 1 )
+      s.vc_arb_en  = Wire[num_ports]( 1 )
+      s.vc_out_val = Wire[num_ports]( 1 )
+      s.vc_out_rdy = Wire[num_ports]( 1 )
+      s.vc_out_msg = Wire[num_ports]( s.last_bit )
+      # Virtual channel buffers - 
+      #   upper buffer reserved for X DOR and lower for Y DOR
+      s.vc_buffers_upper = NormalQueue[num_ports](2, msg_type)
+      s.vc_buffers_lower = NormalQueue[num_ports](2, msg_type)
       for i in range( num_ports ):
-        # DeMux the val signal
-        s.vc_buffers_upper[i].enq.val.value = s.in_[i].val if s.vc_id[i] == 0 else 0
-        s.vc_buffers_lower[i].enq.val.value = s.in_[i].val if s.vc_id[i] == 1 else 0
-        # Mux the rdy signal
-        if s.vc_id[i] == 0:
-          s.in_[i].rdy.value = s.vc_buffers_upper[i].enq.rdy
-        else:
-          s.in_[i].rdy.value = s.vc_buffers_lower[i].enq.rdy
-
-    @s.combinational
-    def vcOutValRdy():
+        s.connect_pairs(
+          s.vc_buffers_upper[i].enq.msg, s.in_[i].msg,
+          s.vc_buffers_lower[i].enq.msg, s.in_[i].msg
+        )
+      s.vc_arbitor_en = Wire[num_ports](2)
+      s.vc_arbitors   = RoundRobinArbiterEn[num_ports](2)
       for i in range( num_ports ):
-        # DeMux rdy signal
-        s.vc_buffers_upper[i].deq.rdy.value = s.vc_out_rdy[i] if s.vc_out_id[i] == 0 else 0
-        s.vc_buffers_lower[i].deq.rdy.value = s.vc_out_rdy[i] if s.vc_out_id[i] == 1 else 0
-        # Mux msg and val
-        if s.vc_out_id[i] == 0:
-          s.vc_out_val[i].value = s.vc_buffers_upper[i].deq.val
-          s.vc_out_msg[i].value = s.vc_buffers_upper[i].deq.msg
-        else:
-          s.vc_out_val[i].value = s.vc_buffers_lower[i].deq.val
-          s.vc_out_msg[i].value = s.vc_buffers_lower[i].deq.msg
+        s.connect_pairs(
+          s.vc_buffers_upper[i].deq.val, s.vc_arbitors[i].reqs[0],
+          s.vc_buffers_lower[i].deq.val, s.vc_arbitors[i].reqs[1],
+          s.vc_arb_en[i],                s.vc_arbitors[i].en
+        )
+    else:
+      # Normal Input buffers
+      s.input_buffer = NormalQueue[num_ports](2, msg_type)
+      for i in range( num_ports ):
+        s.connect_pairs(
+          s.input_buffer[i].enq.msg,     s.in_[i].msg,
+          s.input_buffer[i].deq.msg, s.crossbar.in_[i]
+        )
+      @s.combinational
+      def normalOut():
+        for i in ( num_ports ):
+          s.vc_out_msg[i].value = s.input_buffer[i].deq.msg
+          s.vc_out_val[i].value = s.input_buffer[i].deq.val
+          s.input_buffer[i].deq.rdy = s.vc_out_rdy[i]
 
-    for i in range( num_ports ):
-      s.connect( s.vc_out_msg[i], s.crossbar.in_[i] )
+    # Virtual channel connections
+    if virtual_channel:
+
+      @s.combinational
+      def vcInValRdy():
+          for i in range( num_ports ):
+            # DeMux the val signal
+            s.vc_buffers_upper[i].enq.val.value = s.in_[i].val if s.vc_id[i] == 0 else 0
+            s.vc_buffers_lower[i].enq.val.value = s.in_[i].val if s.vc_id[i] == 1 else 0
+            # Mux the rdy signal
+            if s.vc_id[i] == 0:
+              s.in_[i].rdy.value = s.vc_buffers_upper[i].enq.rdy
+            else:
+              s.in_[i].rdy.value = s.vc_buffers_lower[i].enq.rdy
+
+      @s.combinational
+      def vcOutValRdy():
+        for i in range( num_ports ):
+          # DeMux rdy signal
+          s.vc_buffers_upper[i].deq.rdy.value = s.vc_out_rdy[i] if s.vc_out_id[i] == 0 else 0
+          s.vc_buffers_lower[i].deq.rdy.value = s.vc_out_rdy[i] if s.vc_out_id[i] == 1 else 0
+          # Mux msg and val
+          if s.vc_out_id[i] == 0:
+            s.vc_out_val[i].value = s.vc_buffers_upper[i].deq.val
+            s.vc_out_msg[i].value = s.vc_buffers_upper[i].deq.msg
+          else:
+            s.vc_out_val[i].value = s.vc_buffers_lower[i].deq.val
+            s.vc_out_msg[i].value = s.vc_buffers_lower[i].deq.msg
+
+      for i in range( num_ports ):
+        s.connect( s.vc_out_msg[i], s.crossbar.in_[i] )
 
     # Input buffers
     #s.input_buffer = NormalQueue[num_ports](2, msg_type)
@@ -140,14 +163,7 @@ class MeshVCRouterRTL( Model ):
     #  )
 
     # Arbitors
-    s.vc_arbitor_en = Wire[num_ports](2)
-    s.vc_arbitors   = RoundRobinArbiterEn[num_ports](2)
-    for i in range( num_ports ):
-      s.connect_pairs(
-        s.vc_buffers_upper[i].deq.val, s.vc_arbitors[i].reqs[0],
-        s.vc_buffers_lower[i].deq.val, s.vc_arbitors[i].reqs[1],
-        s.vc_arb_en[i],                s.vc_arbitors[i].en
-      )
+
 
 
     s.arbitors = RoundRobinArbiterEn[num_ports](num_ports)
@@ -159,18 +175,19 @@ class MeshVCRouterRTL( Model ):
     #--------------------------------------------------------------
     # Control Logic
     #--------------------------------------------------------------
-    @s.combinational
-    def setVCInID():
-      for i in range( num_ports ):
-        s.vc_id[i].value = s.in_[i].msg[s.opaque_offset]
+    if virtual_channel:
+      @s.combinational
+      def setVCInID():
+        for i in range( num_ports ):
+          s.vc_id[i].value = s.in_[i].msg[s.opaque_offset]
 
-    @s.combinational
-    def setVCOutID():
-      for i in range( num_ports ):
-        if s.vc_arbitors[i].grants[0]:
-          s.vc_out_id[i].value = 0
-        else:
-          s.vc_out_id[i].value = 1
+      @s.combinational
+      def setVCOutID():
+        for i in range( num_ports ):
+          if s.vc_arbitors[i].grants[0]:
+            s.vc_out_id[i].value = 0
+          else:
+            s.vc_out_id[i].value = 1
 
     @s.combinational
     def getDestAddr():
@@ -209,30 +226,32 @@ class MeshVCRouterRTL( Model ):
       for i in range( num_ports ):
         s.arbitor_en[i].value = s.out[i].val & s.out[i].rdy 
     
-    # Routing Algorithm goes HERE!!!
+    # Routing Algorithm
     # y-dimension-order routing
-    @s.combinational
-    def setArbitorReq():
-      if routing_algo == 'DOR_Y':
-        for i in range( num_ports ):
-          s.arbitors[i].reqs.value = 0
-        for i in range( num_ports ):
-          if s.pos_x == s.dest_x[i] and s.pos_y == s.dest_y[i]:
-            s.arbitors[DIR_C].reqs[i].value = s.vc_out_val[i]
+    if routing_algo == 'DOR_Y':
+      @s.combinational
+      def yDORSetArbitorReq():
+          for i in range( num_ports ):
+            s.arbitors[i].reqs.value = 0
+          for i in range( num_ports ):
+            if s.pos_x == s.dest_x[i] and s.pos_y == s.dest_y[i]:
+              s.arbitors[DIR_C].reqs[i].value = s.vc_out_val[i]
 
-          elif s.dest_y[i] < s.pos_y:
-            s.arbitors[DIR_N].reqs[i].value = s.vc_out_val[i]
-          
-          elif s.dest_y[i] > s.pos_y:
-            s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]
-          
-          elif s.dest_x[i] < s.pos_x:
-            s.arbitors[DIR_W].reqs[i].value = s.vc_out_val[i]
-          
-          else:
-            s.arbitors[DIR_E].reqs[i].value = s.vc_out_val[i]
+            elif s.dest_y[i] < s.pos_y:
+              s.arbitors[DIR_N].reqs[i].value = s.vc_out_val[i]
+            
+            elif s.dest_y[i] > s.pos_y:
+              s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]
+            
+            elif s.dest_x[i] < s.pos_x:
+              s.arbitors[DIR_W].reqs[i].value = s.vc_out_val[i]
+            
+            else:
+              s.arbitors[DIR_E].reqs[i].value = s.vc_out_val[i]
 
-      elif routing_algo == 'DOR_X':
+    elif routing_algo == 'DOR_X':
+      @s.combinational
+      def xDORSetArbitorReq():
         for i in range( num_ports ):
           s.arbitors[i].reqs.value = 0
         for i in range( num_ports ):
@@ -250,8 +269,8 @@ class MeshVCRouterRTL( Model ):
           
           else:
             s.arbitors[DIR_S].reqs[i].value = s.vc_out_val[i]
-      else:
-        raise AssertionError( 'Invalid routing algorithm!' )
+    else:
+      raise AssertionError( 'Invalid routing algorithm!' )
     
   def line_trace( s ):
     opaque_offset = s.payload_nbits

@@ -319,7 +319,7 @@ def test_hypothesis( mesh_wid, mesh_ht, src_delay, sink_delay,
                           min_size = 1, max_size = 100) )
   
   run_vc_router_test( MeshVCRouterRTL(mesh_wid=mesh_wid, mesh_ht=mesh_ht, 
-                                      routing_algo=routing_algo),
+                                      routing_algo=routing_algo, virtual_channel=True),
                       mesh_wid, mesh_ht, pos_x, pos_y, 8, 32,
                       mk_test_msgs( 5, mesh_wid, mesh_ht, msgs ), 
                       src_delay, sink_delay,
